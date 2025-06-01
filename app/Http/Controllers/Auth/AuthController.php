@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
 {
@@ -68,12 +69,24 @@ class AuthController extends Controller
                 'user' => auth()->guard('api')->user(),
                 'token' => $token
             ], 200);
-            
+
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    public function logout()
+    {
+        $removeToken = JWTAuth::invalidate(JWTAuth::getToken());
+
+        if ($removeToken) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Logout Success!',
+            ], 200);
         }
     }
 }
