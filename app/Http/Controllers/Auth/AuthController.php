@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\EmailVerification;
 use App\Models\User;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -27,8 +30,10 @@ class AuthController extends Controller
         try {
             $validatedData = $validate->validated();
             $validatedData['password'] = Hash::make($validatedData['password']);
-            User::create($validatedData);
+            $user = User::create($validatedData);
 
+            $urlVerify = url('/user/verify-email/' . $user->id);
+            Mail::to($user->email)->send(new EmailVerification($urlVerify));
             return response()->json([
                 "message" => "User successfully register!",
                 "success" => true
@@ -41,39 +46,50 @@ class AuthController extends Controller
             ], 500);
         }
 
-
     }
     public function login(Request $request)
     {
-        $validate = Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required',
         ]);
 
-        if ($validate->fails()) {
-            return response()->json($validate->errors(), 422);
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
         }
 
         $credentials = $request->only('email', 'password');
 
         try {
-            if (!$token = auth()->guard('api')->attempt($credentials)) {
+            if (!$token = Auth::guard('api')->attempt($credentials)) {
                 return response()->json([
-                    'message' => 'Invalid Credentials',
                     'success' => false,
+                    'message' => 'Invalid credentials.',
                 ], 401);
+            }
+
+            $user = Auth::guard('api')->user();
+
+            if (is_null($user->email_verified_at)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email not verified.',
+                ], 403);
             }
 
             return response()->json([
                 'success' => true,
-                'user' => auth()->guard('api')->user(),
-                'token' => $token
+                'user' => $user,
+                'token' => $token,
             ], 200);
 
         } catch (Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
